@@ -2,6 +2,7 @@ package org.mruby.parser;
 
 import java.util.ArrayList;
 
+import org.mruby.parser.exception.ParseException;
 import org.mruby.utils.Utils;
 
 public class Parser {
@@ -184,7 +185,7 @@ public class Parser {
 					continue;
 				}
 				if (currentChar == '(') {
-					i = parseMethodDefinition(methodDefinition, i + 1, rubyExpression);
+					i = parseMethodDefinition(methodDefinition, i + 1, rubyExpression, true);
 					currentContext = DEFINE_METHOD_BODY;
 					continue;
 				}
@@ -204,7 +205,7 @@ public class Parser {
 					continue;
 				}
 				if (currentChar == '(') {
-					i = parseMethodDefinition(methodDefinition, i + 1, rubyExpression);
+					i = parseMethodDefinition(methodDefinition, i + 1, rubyExpression, true);
 					currentContext = DEFINE_METHOD_BODY;
 					continue;
 				}
@@ -213,7 +214,8 @@ public class Parser {
 					continue;
 				}
 				if (Character.isAlphabetic(currentChar)) {
-					i = parseMethodDefinition(methodDefinition, i, rubyExpression);
+					i = parseMethodDefinition(methodDefinition, i, rubyExpression, false);
+					currentContext = DEFINE_METHOD_BODY;
 					continue;
 				}
 				break;
@@ -240,7 +242,7 @@ public class Parser {
 		return commandList;
 	}
 
-	private int parseMethodDefinition(MethodDefinition methodDefinition, int index, String rubyExpression) {
+	private int parseMethodDefinition(MethodDefinition methodDefinition, int index, String rubyExpression, boolean requireParen) {
 		ParameterDefinition parameterDefinition = null;
 		int currentContext = DEFINE_PARAM_W_NAME;
 		int i = index;
@@ -254,6 +256,7 @@ public class Parser {
 					continue;
 				}
 				if (currentChar == '\n') {
+					if (requireParen) continue;
 					return i;
 				}
 				if (Character.isAlphabetic(currentChar)) {
@@ -275,9 +278,15 @@ public class Parser {
 					currentContext = DEFINE_PARAM_W_NAME;
 					continue;
 				}
-				if (currentChar == '\n' || currentChar == ')') {
+				if (currentChar == '\n') {
 					methodDefinition.addParameter(parameterDefinition);
+					if (requireParen) throw new ParseException(col, lineno, "expected )");;
 					return i;
+				}
+				if (currentChar == ')') {
+					methodDefinition.addParameter(parameterDefinition);
+					if (requireParen) return i;
+					throw new ParseException(col, lineno, "unexpected )");
 				}
 				if (isAlphaOrNumeric(currentChar)) {
 					parameterDefinition.appendToName(currentChar);

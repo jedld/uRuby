@@ -17,6 +17,10 @@ public class Main {
 		System.out.print(Utils.printCommands(commands));
 		commands = ruby.parse("class Test < Hello\ndef hello\nend\ndef hi(message, message2)\nend\nend\n");
 		System.out.print(Utils.printCommands(commands));
+		commands = ruby.parse("class Test < Hello\ndef hello\nend\ndef hi message, message2\nend\nend\n");
+		System.out.print(Utils.printCommands(commands));
+		commands = ruby.parse("class Test < Hello\ndef hello\nend\ndef hi(message, message2\nend\nend\n");
+		System.out.print(Utils.printCommands(commands));
 		ruby.printIR();
 	}
 
