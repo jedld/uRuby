@@ -1,6 +1,7 @@
 package org.mruby.parser;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.mruby.parser.exception.ParseException;
 import org.mruby.utils.Utils;
@@ -20,11 +21,11 @@ public class Parser {
 	private static final int DEFINE_PARAM_W_NAME_START_PAREN = 12;
 	private static final int DEFINE_PARAM_NAME = 13;
 
+
 	int lineno = 1, col = 0;
 
 	public ArrayList<Command> parse(String rubyExpression) {
 		int currentContext = EMPTY_CONTEXT;
-		ClassDefinition classDefinition = null;
 		MethodDefinition methodDefinition = null;
 		ParameterDefinition parameterDefinition = null;
 
@@ -45,12 +46,32 @@ public class Parser {
 				if (currentChar == 'c') {
 					if (Utils.checkString(rubyExpression, i, "class")) {
 						i += "class".length();
-						currentContext = CLASS_DEFINITION_CLASS_W_NAME;
-						classDefinition = new ClassDefinition();
+						ClassDefinition classDefinition = new ClassDefinition();
+						i = parseClassDefinition(classDefinition, i, rubyExpression);
+						currentContext = EMPTY_CONTEXT;
+						Command command = new Command(Command.DEFINE_CLASS);
+						command.setDetails(classDefinition);
+						commandList.add(command);
 						continue;
 					}
 				}
 				break;
+
+			}
+		}
+		return commandList;
+	}
+
+	private int parseClassDefinition(ClassDefinition classDefinition, int index, String rubyExpression) {
+		int i = index;
+		int currentSection = MethodDefinition.CLASS_SECTION_PUBLIC;
+		int currentContext = CLASS_DEFINITION_CLASS_W_NAME;
+		MethodDefinition methodDefinition = null;
+
+		for (; i < rubyExpression.length(); i++) {
+			col++;
+			char currentChar = rubyExpression.charAt(i);
+			switch (currentContext) {
 			case CLASS_DEFINITION_CLASS_W_NAME:
 				logPrint("CLASS_DEFINITION_CLASS_W_NAME");
 				if (currentChar == ' ')
@@ -147,7 +168,8 @@ public class Parser {
 				if (currentChar == 'd') {
 					if (Utils.checkString(rubyExpression, i, "def")) {
 						i += "def".length();
-						methodDefinition = new MethodDefinition();
+						System.out.println("new method " + currentSection);
+						methodDefinition = new MethodDefinition(currentSection);
 						currentContext = DEFINE_METHOD_W_NAME;
 						continue;
 					}
@@ -155,10 +177,16 @@ public class Parser {
 					if (Utils.checkString(rubyExpression, i, "end")) {
 						i += "end".length();
 						currentContext = EMPTY_CONTEXT;
-						Command command = new Command(Command.DEFINE_CLASS);
-						command.setDetails(classDefinition);
-						commandList.add(command);
-						classDefinition = null;
+						return i;
+					}
+				} else if (currentChar == 'p') {
+					if (Utils.checkString(rubyExpression, i, "protected")) {
+						i += "protected".length();
+						currentSection = MethodDefinition.CLASS_SECTION_PROTECTED;
+						continue;
+					} else if (Utils.checkString(rubyExpression, i, "private")) {
+						i += "private".length();
+						currentSection = MethodDefinition.CLASS_SECTION_PRIVATE;
 						continue;
 					}
 				}
@@ -239,10 +267,11 @@ public class Parser {
 				break;
 			}
 		}
-		return commandList;
+		return i;
 	}
 
-	private int parseMethodDefinition(MethodDefinition methodDefinition, int index, String rubyExpression, boolean requireParen) {
+	private int parseMethodDefinition(MethodDefinition methodDefinition, int index, String rubyExpression,
+			boolean requireParen) {
 		ParameterDefinition parameterDefinition = null;
 		int currentContext = DEFINE_PARAM_W_NAME;
 		int i = index;
@@ -256,7 +285,8 @@ public class Parser {
 					continue;
 				}
 				if (currentChar == '\n') {
-					if (requireParen) continue;
+					if (requireParen)
+						continue;
 					return i;
 				}
 				if (Character.isAlphabetic(currentChar)) {
@@ -280,12 +310,15 @@ public class Parser {
 				}
 				if (currentChar == '\n') {
 					methodDefinition.addParameter(parameterDefinition);
-					if (requireParen) throw new ParseException(col, lineno, "expected )");;
+					if (requireParen)
+						throw new ParseException(col, lineno, "expected )");
+					;
 					return i;
 				}
 				if (currentChar == ')') {
 					methodDefinition.addParameter(parameterDefinition);
-					if (requireParen) return i;
+					if (requireParen)
+						return i;
 					throw new ParseException(col, lineno, "unexpected )");
 				}
 				if (isAlphaOrNumeric(currentChar)) {
@@ -301,6 +334,7 @@ public class Parser {
 	boolean isAlphaOrNumeric(char c) {
 		return Character.isAlphabetic(c) || Character.isDigit(c);
 	}
+
 	private void logPrint(String string) {
 		// System.out.println(string);
 	}
