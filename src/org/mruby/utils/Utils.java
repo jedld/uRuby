@@ -20,7 +20,7 @@ public class Utils {
 	public static String printCommands(List<Command> commands) {
 		StringBuilder commandsStr =new StringBuilder();
 		for(Command command : commands) {
-			commandsStr.append(command.toString() + "\n");
+			commandsStr.append(command.toString() + "\\n");
 		}
 		return commandsStr.toString();
 	}

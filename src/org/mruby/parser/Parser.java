@@ -20,6 +20,13 @@ public class Parser {
 	private static final int DEFINE_METHOD_BODY = 11;
 	private static final int DEFINE_PARAM_W_NAME_START_PAREN = 12;
 	private static final int DEFINE_PARAM_NAME = 13;
+	private static final int DEFINE_PARAM_W_OPT = 14;
+	private static final int PARSE_STRING_LITERAL = 15;
+	private static final int DEFINE_PARAM_OPT = 16;
+	private static final int ASSIGNMENT_OR_CALL = 17;
+	private static final int FUNCTION_CALL_W_PARAM = 18;
+	private static final int FUNCTION_CALL = 19;
+	private static final int FUNCTION_CALL_W_NEXT_PARAM = 20;
 
 
 	int lineno = 1, col = 0;
@@ -28,7 +35,8 @@ public class Parser {
 		int currentContext = EMPTY_CONTEXT;
 		MethodDefinition methodDefinition = null;
 		ParameterDefinition parameterDefinition = null;
-
+		FunctionCallDefinition functionCallDefinition = null;
+		StringBuffer identifierBuffer = new StringBuffer();
 		ArrayList<Command> commandList = new ArrayList<>();
 		for (int i = 0; i < rubyExpression.length(); i++) {
 			col++;
@@ -55,8 +63,66 @@ public class Parser {
 						continue;
 					}
 				}
+				if (Character.isAlphabetic(currentChar)) {
+					currentContext = ASSIGNMENT_OR_CALL;
+					identifierBuffer.append(currentChar);
+					continue;
+				}
 				break;
-
+			case ASSIGNMENT_OR_CALL:
+				logPrint("ASSIGNMENT_OR_CALL");
+				if (isAlphaOrNumeric(currentChar)) {
+					identifierBuffer.append(currentChar);
+					continue;
+				}
+				
+				Command command = new Command(Command.CALL_SELF_FUNCTION);
+				functionCallDefinition = new FunctionCallDefinition();
+				functionCallDefinition.setName(identifierBuffer.toString());
+				identifierBuffer = new StringBuffer();
+				command.setDetails(functionCallDefinition);
+				commandList.add(command);
+				
+				if (currentChar == ' ') {
+					currentContext = FUNCTION_CALL_W_PARAM;
+					continue;
+				}
+				if (currentChar == '\n') {
+					currentContext = EMPTY_CONTEXT;
+					continue;
+				}
+				break;
+			case FUNCTION_CALL_W_PARAM:
+				logPrint("FUNCTION_CALL_W_PARAM");
+				if (currentChar == ' ') {
+					continue;
+				}
+				if (currentChar == '\n') {
+					currentContext = EMPTY_CONTEXT;
+				}
+				if (currentChar == '\'') {
+					ConstantStringDefinition constantString = new ConstantStringDefinition();
+					i = parseStringLiteral(constantString, i + 1, rubyExpression);
+					FunctionCallParam functionCallParam = new FunctionCallParam(constantString);
+					functionCallDefinition.addParam(functionCallParam);
+					currentContext = FUNCTION_CALL_W_NEXT_PARAM;
+					continue;
+				}
+				break;
+			case FUNCTION_CALL_W_NEXT_PARAM:
+				logPrint("FUNCTION_CALL_W_NEXT_PARAM");
+				if (currentChar == ' ') {
+					continue;
+				}
+				if (currentChar == '\n') {
+					currentContext = EMPTY_CONTEXT;
+					continue;
+				}
+				if (currentChar == ',') {
+					currentContext = FUNCTION_CALL_W_PARAM;
+					continue;
+				}
+				break;
 			}
 		}
 		return commandList;
@@ -71,6 +137,7 @@ public class Parser {
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
+//			System.out.print(currentChar + " ");
 			switch (currentContext) {
 			case CLASS_DEFINITION_CLASS_W_NAME:
 				logPrint("CLASS_DEFINITION_CLASS_W_NAME");
@@ -278,6 +345,7 @@ public class Parser {
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
+//			System.out.print(currentChar + " ");
 			switch (currentContext) {
 			case DEFINE_PARAM_W_NAME:
 				logPrint("DEFINE_PARAM_W_NAME");
@@ -288,6 +356,31 @@ public class Parser {
 					if (requireParen)
 						continue;
 					return i;
+				}
+				if (currentChar == ')') {
+					if (requireParen)
+						return i;
+					throw new ParseException(col, lineno, "unexpected )");
+				}
+				if (Character.isAlphabetic(currentChar)) {
+					currentContext = DEFINE_PARAM_NAME;
+					parameterDefinition = new ParameterDefinition();
+					parameterDefinition.appendToName(currentChar);
+					continue;
+				}
+				break;
+			case DEFINE_PARAM_W_OPT:
+				logPrint("DEFINE_PARAM_W_OPT");
+				if (currentChar == ' ') {
+					continue;
+				}
+				if (currentChar == ',') {
+					currentContext = DEFINE_PARAM_W_NAME;
+					continue;
+				}
+				if (currentChar == '=') {
+					currentContext = DEFINE_PARAM_OPT;
+					continue;
 				}
 				if (Character.isAlphabetic(currentChar)) {
 					currentContext = DEFINE_PARAM_NAME;
@@ -300,9 +393,15 @@ public class Parser {
 				logPrint("DEFINE_PARAM_NAME");
 				if (currentChar == ' ') {
 					methodDefinition.addParameter(parameterDefinition);
-					currentContext = DEFINE_PARAM_W_NAME;
+					currentContext = DEFINE_PARAM_W_OPT;
 					continue;
 				}
+				if (currentChar == '=') {
+					methodDefinition.addParameter(parameterDefinition);
+					currentContext = DEFINE_PARAM_OPT;
+					continue;
+				}
+				
 				if (currentChar == ',') {
 					methodDefinition.addParameter(parameterDefinition);
 					currentContext = DEFINE_PARAM_W_NAME;
@@ -312,7 +411,6 @@ public class Parser {
 					methodDefinition.addParameter(parameterDefinition);
 					if (requireParen)
 						throw new ParseException(col, lineno, "expected )");
-					;
 					return i;
 				}
 				if (currentChar == ')') {
@@ -326,17 +424,54 @@ public class Parser {
 					continue;
 				}
 				break;
+			case DEFINE_PARAM_OPT:
+				logPrint("DEFINE_PARAM_OPT");
+				if (currentChar == ' ') {
+					continue;
+				}
+				if (currentChar == '\'') {
+					ConstantStringDefinition constantString = new ConstantStringDefinition();
+					i = parseStringLiteral(constantString, i + 1, rubyExpression);
+					parameterDefinition.setDefaultValue(constantString);
+					currentContext = DEFINE_PARAM_W_NAME;
+					continue;
+				}
+				break;
+			}
+		}
+		return i;
+	}
+
+	private int parseStringLiteral(ConstantStringDefinition constantString, int index, String rubyExpression) {
+		int currentContext = PARSE_STRING_LITERAL;
+		int i = index;
+		for (; i < rubyExpression.length(); i++) {
+			col++;
+			char currentChar = rubyExpression.charAt(i);
+//			System.out.print(currentChar + " ");
+			switch (currentContext) {
+				case PARSE_STRING_LITERAL:
+					logPrint("PARSE_STRING_LITERAL");
+					if (currentChar == '\'') {
+						return i;
+					}
+					constantString.appendValue(currentChar);
+				break;
 			}
 		}
 		return i;
 	}
 
 	boolean isAlphaOrNumeric(char c) {
-		return Character.isAlphabetic(c) || Character.isDigit(c);
+		return Character.isAlphabetic(c) || Character.isDigit(c) || c == '_';
+	}
+	
+	boolean isValidStarterCharacter(char c) {
+		return Character.isAlphabetic(c) || c == '_';
 	}
 
 	private void logPrint(String string) {
-		// System.out.println(string);
+		 System.out.println(string);
 	}
 
 }
