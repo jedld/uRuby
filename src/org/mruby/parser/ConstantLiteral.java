@@ -7,6 +7,16 @@ public class ConstantLiteral {
 		// TODO Auto-generated method stub
 		valueBuffer.append(currentChar);
 	}
+	
+	public void appendValue(char[] currentChars) {
+		// TODO Auto-generated method stub
+		valueBuffer.append(currentChars);
+	}
+	
+	public void appendCodePoint(int codepoint) {
+		// TODO Auto-generated method stub
+		valueBuffer.appendCodePoint(codepoint);
+	}
 
 	public String value() {
 		return valueBuffer.toString();

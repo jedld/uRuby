@@ -19,8 +19,11 @@ public class Utils {
 
 	public static String printCommands(List<Statement> commands) {
 		StringBuilder commandsStr =new StringBuilder();
+		commandsStr.append(commands.size());
 		for(Statement command : commands) {
-			commandsStr.append(command.toString() + "\\n");
+			if (!command.toString().isEmpty()) {
+				commandsStr.append(command.toString() + "\\n");
+			}
 		}
 		return commandsStr.toString();
 	}

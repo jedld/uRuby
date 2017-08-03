@@ -16,7 +16,12 @@ public class Ruby {
 		ArrayList<Statement> statements = new ArrayList<Statement>();
 		int i = 0;
 		for(; i < rubyExpression.length(); i++) {
-			i = parser.parseStatement(i, statements, rubyExpression);
+			if (!rubyExpression.endsWith("\n")) {
+				i = parser.parseStatement(i, statements, rubyExpression + "\n");
+			} else {
+				i = parser.parseStatement(i, statements, rubyExpression);
+			}
+			
 		}
 		return statements;
 	}

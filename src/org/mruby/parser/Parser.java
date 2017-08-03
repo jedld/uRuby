@@ -29,9 +29,57 @@ public class Parser {
 	private static final int FUNCTION_CALL_W_NEXT_PARAM = 20;
 	private static final int PARSE_ESCAPE_SEQUENCE = 21;
 	private static final int PARSE_ESCAPE_CHARACTER_CODE = 22;
-
+	private static final int DEFINE_METHOD_NAME_MUST_END = 23;
+	private static final int CAPUTRE_METHOD_CALL_NAME = 24;
+	private static final int FUNCTION_CALL_W_PARAM_START_PAREN = 25;
+	private static final int FUNCTION_CALL_W_NEXT_CALL = 26;
+	private static final int FUNCTION_CALL_W_NEXT_PARAM_PAREN = 27;
+	private static final int PARSE_EXPRESSION = 28;
 
 	int lineno = 1, col = 0;
+
+	public Object parseExpression(int i, ArrayList<Expression> expressions, String rubyExpression) {
+		int currentContext = PARSE_EXPRESSION;
+		Expression expression = null;
+		FunctionCallDefinition functionCallDefinition = null;
+		StringBuffer identifierBuffer = new StringBuffer();
+		for (; i < rubyExpression.length(); i++) {
+			col++;
+			char currentChar = rubyExpression.charAt(i);
+			printChar(currentChar);
+			switch (currentContext) {
+			case PARSE_EXPRESSION:
+				logPrint("PARSE_EXPRESSION");
+				if (currentChar == ' ')
+					continue;
+				if (currentChar == '\n') {
+					lineno++;
+					col = 0;
+					continue;
+				}
+				if (currentChar == '\'') {
+					ConstantStringDefinition constantString = new ConstantStringDefinition();
+					i = parseStringLiteral(constantString, i + 1, rubyExpression);
+					return constantString;
+				}
+				if (currentChar == '\"') {
+					InterpolatedStringDefinition interpString = new InterpolatedStringDefinition();
+					i = parseStringLiteral(interpString, i + 1, rubyExpression);
+					return interpString;
+				}
+				if (isValidVariableStarterCharacter(currentChar)) {
+					currentContext = ASSIGNMENT_OR_CALL;
+					identifierBuffer.append(currentChar);
+					continue;
+				}
+				break;
+			case ASSIGNMENT_OR_CALL:
+				
+				break;
+			}
+		}
+		return i;
+	}
 
 	public int parseStatement(int i, ArrayList<Statement> statements, String rubyExpression) {
 		int currentContext = PARSE_STATEMENT;
@@ -40,6 +88,7 @@ public class Parser {
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
+			printChar(currentChar);
 			switch (currentContext) {
 			case PARSE_STATEMENT:
 				logPrint("PARSE_STATEMENT");
@@ -48,7 +97,7 @@ public class Parser {
 				if (currentChar == '\n') {
 					lineno++;
 					col = 0;
-					return i + i;
+					return i;
 				}
 				if (currentChar == ';') {
 					return i;
@@ -65,7 +114,7 @@ public class Parser {
 						continue;
 					}
 				}
-				if (Character.isAlphabetic(currentChar)) {
+				if (isValidVariableStarterCharacter(currentChar)) {
 					currentContext = ASSIGNMENT_OR_CALL;
 					identifierBuffer.append(currentChar);
 					continue;
@@ -77,29 +126,86 @@ public class Parser {
 					identifierBuffer.append(currentChar);
 					continue;
 				}
-				
-				Statement command = new Statement(Statement.CALL_SELF_FUNCTION);
-				functionCallDefinition = new FunctionCallDefinition();
-				functionCallDefinition.setName(identifierBuffer.toString());
-				identifierBuffer = new StringBuffer();
-				command.setDetails(functionCallDefinition);
-				statements.add(command);
-				
+
+				if (currentChar == '.') {
+					Statement command = new Statement(Statement.CALL_OBJECT_FUNCTION);
+					functionCallDefinition = new FunctionCallDefinition();
+					functionCallDefinition.setObject(identifierBuffer.toString());
+					identifierBuffer = new StringBuffer();
+					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					command.setDetails(functionCallDefinition);
+					statements.add(command);
+					continue;
+				} else {
+					Statement command = new Statement(Statement.CALL_SELF_FUNCTION);
+					functionCallDefinition = new FunctionCallDefinition();
+					functionCallDefinition.setName(identifierBuffer.toString());
+					identifierBuffer = new StringBuffer();
+					command.setDetails(functionCallDefinition);
+					statements.add(command);
+				}
+
 				if (currentChar == ' ') {
 					currentContext = FUNCTION_CALL_W_PARAM;
 					continue;
 				}
+				if (currentChar == '(') {
+					currentContext = FUNCTION_CALL_W_PARAM_START_PAREN;
+					continue;
+				}
 				if (currentChar == '\n') {
-					return i + 1;
+					return i;
 				}
 				break;
+			case CAPUTRE_METHOD_CALL_NAME:
+				logPrint("CAPUTRE_METHOD_CALL_NAME");
+				if (isAlphaOrNumeric(currentChar)) {
+					identifierBuffer.append(currentChar);
+					continue;
+				}
+				System.out.println("set name" + identifierBuffer.toString());
+				functionCallDefinition.setName(identifierBuffer.toString());
+
+				if (currentChar == '.') {
+					Statement command = new Statement(Statement.CALL_OBJECT_FUNCTION);
+					FunctionCallDefinition newFunctionCallDefinition = new FunctionCallDefinition();
+					functionCallDefinition.setNextObject(newFunctionCallDefinition);
+					newFunctionCallDefinition.setObject(functionCallDefinition);
+					functionCallDefinition = newFunctionCallDefinition;
+					identifierBuffer = new StringBuffer();
+					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					command.setDetails(newFunctionCallDefinition);
+					statements.add(command);
+				}
+
+				if (currentChar == ' ') {
+					currentContext = FUNCTION_CALL_W_PARAM;
+					continue;
+				}
+				if (currentChar == '(') {
+					currentContext = FUNCTION_CALL_W_PARAM_START_PAREN;
+					continue;
+				}
+				if (currentChar == '\n') {
+					return i;
+				}
+				break;
+			case FUNCTION_CALL_W_PARAM_START_PAREN:
 			case FUNCTION_CALL_W_PARAM:
 				logPrint("FUNCTION_CALL_W_PARAM");
 				if (currentChar == ' ') {
 					continue;
 				}
 				if (currentChar == '\n') {
-					return i + i;
+					if (currentContext == FUNCTION_CALL_W_PARAM_START_PAREN)
+						continue;
+					return i;
+				}
+				if (currentChar == ')') {
+					if (currentContext == FUNCTION_CALL_W_PARAM_START_PAREN) {
+						currentContext = FUNCTION_CALL_W_NEXT_CALL;
+						continue;
+					}
 				}
 				if (currentChar == '\'') {
 					ConstantStringDefinition constantString = new ConstantStringDefinition();
@@ -114,21 +220,59 @@ public class Parser {
 					i = parseStringLiteral(interpString, i + 1, rubyExpression);
 					FunctionCallParam functionCallParam = new FunctionCallParam(interpString);
 					functionCallDefinition.addParam(functionCallParam);
-					currentContext = FUNCTION_CALL_W_NEXT_PARAM;
+
+					if (currentContext == FUNCTION_CALL_W_PARAM_START_PAREN) {
+						currentContext = FUNCTION_CALL_W_NEXT_PARAM_PAREN;
+					} else {
+						currentContext = FUNCTION_CALL_W_NEXT_PARAM;
+					}
 					continue;
 				}
 				break;
+			case FUNCTION_CALL_W_NEXT_CALL:
+				logPrint("FUNCTION_CALL_W_NEXT_CALL");
+				if (currentChar == '.') {
+					currentContext = FUNCTION_CALL_W_PARAM;
+					Statement command = new Statement(Statement.CALL_OBJECT_FUNCTION);
+					FunctionCallDefinition newFunctionCallDefinition = new FunctionCallDefinition();
+					newFunctionCallDefinition.setObject(functionCallDefinition);
+					functionCallDefinition = newFunctionCallDefinition;
+					identifierBuffer = new StringBuffer();
+					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					command.setDetails(newFunctionCallDefinition);
+					statements.add(command);
+					continue;
+				}
+				if (currentChar == ' ') {
+					currentContext = FUNCTION_CALL_W_PARAM;
+					continue;
+				}
+				if (currentChar == '\n') {
+					return i;
+				}
+			case FUNCTION_CALL_W_NEXT_PARAM_PAREN:
+				logPrint("FUNCTION_CALL_W_NEXT_PARAM_PAREN");
 			case FUNCTION_CALL_W_NEXT_PARAM:
 				logPrint("FUNCTION_CALL_W_NEXT_PARAM");
 				if (currentChar == ' ') {
 					continue;
 				}
 				if (currentChar == '\n') {
-					return i + 1;
+					return i;
 				}
 				if (currentChar == ',') {
 					currentContext = FUNCTION_CALL_W_PARAM;
 					continue;
+				}
+				if (currentChar == ';') {
+					return i;
+				}
+				if (currentChar == ')') {
+					if (currentContext == FUNCTION_CALL_W_NEXT_PARAM_PAREN) {
+						currentContext = FUNCTION_CALL_W_NEXT_CALL;
+						continue;
+					}
+					throw new ParseException(col, lineno, "unexpected token )");
 				}
 				break;
 			}
@@ -145,7 +289,7 @@ public class Parser {
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
-//			System.out.print(currentChar + " ");
+			printChar(currentChar);
 			switch (currentContext) {
 			case CLASS_DEFINITION_CLASS_W_NAME:
 				logPrint("CLASS_DEFINITION_CLASS_W_NAME");
@@ -243,7 +387,7 @@ public class Parser {
 				if (currentChar == 'd') {
 					if (Utils.checkString(rubyExpression, i, "def")) {
 						i += "def".length();
-						System.out.println("new method " + currentSection);
+						// System.out.println("new method " + currentSection);
 						methodDefinition = new MethodDefinition(currentSection);
 						currentContext = DEFINE_METHOD_W_NAME;
 						continue;
@@ -301,7 +445,29 @@ public class Parser {
 					methodDefinition.appendToName(currentChar);
 					continue;
 				}
+
+				if (isSpecialOperatorNames(currentChar)) {
+					currentContext = DEFINE_METHOD_NAME_MUST_END;
+					methodDefinition.appendToName(currentChar);
+					continue;
+				}
 				break;
+			case DEFINE_METHOD_NAME_MUST_END:
+				if (currentChar == '\n') {
+					currentContext = DEFINE_METHOD_BODY;
+					lineno++;
+					continue;
+				}
+				if (currentChar == ' ') {
+					currentContext = DEFINE_PARAM_W_NAME;
+					continue;
+				}
+				if (currentChar == '(') {
+					i = parseMethodDefinition(methodDefinition, i + 1, rubyExpression, true);
+					currentContext = DEFINE_METHOD_BODY;
+					continue;
+				}
+				throw new ParseException(col, lineno, "!,= or ? can only appear at the end of a method name");
 			case DEFINE_PARAM_W_NAME:
 				logPrint("DEFINE_PARAM_W_NAME");
 				if (currentChar == ' ') {
@@ -346,6 +512,10 @@ public class Parser {
 		return i;
 	}
 
+	private void printChar(char currentChar) {
+		System.out.print(currentChar + " ");
+	}
+
 	private int parseMethodDefinition(MethodDefinition methodDefinition, int index, String rubyExpression,
 			boolean requireParen) {
 		ParameterDefinition parameterDefinition = null;
@@ -354,7 +524,7 @@ public class Parser {
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
-//			System.out.print(currentChar + " ");
+			printChar(currentChar);
 			switch (currentContext) {
 			case DEFINE_PARAM_W_NAME:
 				logPrint("DEFINE_PARAM_W_NAME");
@@ -410,7 +580,7 @@ public class Parser {
 					currentContext = DEFINE_PARAM_OPT;
 					continue;
 				}
-				
+
 				if (currentChar == ',') {
 					methodDefinition.addParameter(parameterDefinition);
 					currentContext = DEFINE_PARAM_W_NAME;
@@ -454,45 +624,75 @@ public class Parser {
 	private int parseStringLiteral(ConstantLiteral constantString, int index, String rubyExpression) {
 		int currentContext = PARSE_STRING_LITERAL;
 		int i = index;
+		StringBuffer escapeCode = null;
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
 			final char delimiter = constantString instanceof ConstantStringDefinition ? '\'' : '"';
-//			System.out.print(currentChar + " ");
+			printChar(currentChar);
 			switch (currentContext) {
-				case PARSE_STRING_LITERAL:
-					logPrint("PARSE_STRING_LITERAL");
-					if (currentChar == delimiter) {
-						return i;
-					}
-					if (currentChar == '\\') {
-						currentContext = PARSE_ESCAPE_SEQUENCE;
-						continue;
-					}
-					constantString.appendValue(currentChar);
+			case PARSE_ESCAPE_CHARACTER_CODE:
+				logPrint("PARSE_ESCAPE_CHARACTER_CODE");
+				if (Character.isDigit(currentChar)) {
+					escapeCode.append(currentChar);
+					continue;
+				}
+				constantString.appendCodePoint(Integer.parseInt(escapeCode.toString()));
+				currentContext = PARSE_STRING_LITERAL;
+			case PARSE_STRING_LITERAL:
+				logPrint("PARSE_STRING_LITERAL");
+				if (currentChar == delimiter) {
+					return i;
+				}
+				if (currentChar == '\\') {
+					currentContext = PARSE_ESCAPE_SEQUENCE;
+					continue;
+				}
+				constantString.appendValue(currentChar);
 				break;
-				case PARSE_ESCAPE_SEQUENCE:
-					logPrint("PARSE_STRING_LITERAL");
-					if (currentChar == '\\') {
-						constantString.appendValue('\\');
-						currentContext = PARSE_STRING_LITERAL;
-						continue;
-					}
-					if (currentChar == '"') {
-						constantString.appendValue('"');
-						currentContext = PARSE_STRING_LITERAL;
-						continue;
-					}
-					if (currentChar == '\'') {
-						constantString.appendValue('\'');
-						currentContext = PARSE_STRING_LITERAL;
-						continue;
-					}
-					if (Character.isDigit(currentChar)) {
-						currentContext = PARSE_ESCAPE_CHARACTER_CODE;
-						continue;
-					}
-					break;
+			case PARSE_ESCAPE_SEQUENCE:
+				logPrint("PARSE_STRING_LITERAL");
+				if (currentChar == '\\') {
+					constantString.appendValue('\\');
+					currentContext = PARSE_STRING_LITERAL;
+					continue;
+				}
+				if (currentChar == '"') {
+					constantString.appendValue('"');
+					currentContext = PARSE_STRING_LITERAL;
+					continue;
+				}
+				if (currentChar == '\'') {
+					constantString.appendValue('\'');
+					currentContext = PARSE_STRING_LITERAL;
+					continue;
+				}
+				if (currentChar == 'n') {
+					constantString.appendValue('\n');
+					currentContext = PARSE_STRING_LITERAL;
+					continue;
+				}
+				if (currentChar == 'r') {
+					constantString.appendValue('\r');
+					currentContext = PARSE_STRING_LITERAL;
+					continue;
+				}
+				if (currentChar == 't') {
+					constantString.appendValue('\t');
+					currentContext = PARSE_STRING_LITERAL;
+					continue;
+				}
+				if (currentChar == 'u') {
+					currentContext = PARSE_ESCAPE_CHARACTER_CODE;
+					escapeCode = new StringBuffer();
+					continue;
+				}
+				// if (Character.isDigit(currentChar)) {
+				// currentContext = PARSE_ESCAPE_CHARACTER_CODE;
+				// escapeCode = new StringBuffer();
+				// continue;
+				// }
+				break;
 			}
 		}
 		return i;
@@ -501,13 +701,21 @@ public class Parser {
 	boolean isAlphaOrNumeric(char c) {
 		return Character.isAlphabetic(c) || Character.isDigit(c) || c == '_';
 	}
-	
-	boolean isValidStarterCharacter(char c) {
+
+	boolean isValidMethodStarterCharacter(char c) {
 		return Character.isAlphabetic(c) || c == '_';
 	}
 
+	boolean isSpecialOperatorNames(char c) {
+		return c == '!' || c == '?' || c == '=';
+	}
+
+	boolean isValidVariableStarterCharacter(char c) {
+		return Character.isAlphabetic(c) || c == '_' || c == '@';
+	}
+
 	private void logPrint(String string) {
-		 System.out.println(string);
+		System.out.println(string);
 	}
 
 }

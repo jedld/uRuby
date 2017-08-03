@@ -3,6 +3,7 @@ package org.mruby.parser;
 public class Statement {
 	public static final int DEFINE_CLASS = 1;
 	public static final int CALL_SELF_FUNCTION = 2;
+	public static final int CALL_OBJECT_FUNCTION = 3;
 	private int code;
 	private Object details;
 
@@ -40,11 +41,10 @@ public class Statement {
 				}
 				strBuilder.append("\\n");
 			}
-		} else if (code == CALL_SELF_FUNCTION) {
+		} else if (code == CALL_SELF_FUNCTION || code == CALL_OBJECT_FUNCTION) {
 			FunctionCallDefinition definition = (FunctionCallDefinition) details;
-			strBuilder.append("call local " + definition.getName() + ":");
-			for(FunctionCallParam param : definition.getParams()) {
-				strBuilder.append(param.toString() + " ");
+			if (definition.nextObject == null) {
+				strBuilder.append(definition.toString());
 			}
 		}
 		return strBuilder.toString();
