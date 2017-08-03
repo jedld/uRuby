@@ -38,6 +38,7 @@ public class Parser {
 	private static final int FUNCTION_CALL_ON_LITERAL = 29;
 	private static final int WAIT_EOL = 30;
 	private static final int CAPTURE_NUMERIC_LITERAL = 31;
+	private static final int CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR = 32;
 
 	int lineno = 1, col = 0;
 
@@ -189,7 +190,7 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					functionCallDefinition = new FunctionCallDefinition();
 					functionCallDefinition.setObject(identifierBuffer.toString());
 					identifierBuffer = new StringBuffer();
-					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					currentContext = CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR;
 					output = functionCallDefinition;
 					continue;
 				} else {
@@ -211,12 +212,25 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					return new Pair<Integer, Object>(i, output);
 				}
 				break;
+			case CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR:
+				logPrint("CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR");
+				if (isAlphaOrNumeric(currentChar)) {
+					identifierBuffer.append(currentChar);
+					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					continue;
+				}
+				if (currentChar == '(') {
+					functionCallDefinition.setName("call");
+					currentContext = FUNCTION_CALL_W_PARAM_START_PAREN;
+					continue;
+				}
 			case CAPUTRE_METHOD_CALL_NAME:
 				logPrint("CAPUTRE_METHOD_CALL_NAME");
 				if (isAlphaOrNumeric(currentChar)) {
 					identifierBuffer.append(currentChar);
 					continue;
 				}
+				
 				System.out.println("set name" + identifierBuffer.toString());
 				functionCallDefinition.setName(identifierBuffer.toString());
 
@@ -256,7 +270,7 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 				}
 				if (currentChar == ')') {
 					if (currentContext == FUNCTION_CALL_W_PARAM_START_PAREN) {
-						return new Pair<Integer, Object>(i - 1, output);
+						return new Pair<Integer, Object>(i, output);
 					}
 					throw new ParseException(col, lineno, "unexpected )");
 				}
