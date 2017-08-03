@@ -14,13 +14,13 @@ public class Main {
 		test("class Test < Hello\nend\n","1define class(Test) < Hello\\n\\n");
 		test("class Test < Hello\ndef hello\nend\nend\n","1define class(Test) < Hello\\n  method(hello):\\n\\n");
 		test("class Test < Hello\ndef hello\nend\ndef hi(message, message2)\nend\nend\n","1define class(Test) < Hello\\n  method(hello):\\n  method(hi):message message2 \\n\\n");
-		test("class Test < Hello\ndef hello(param = 'test')\nend\nend\n","1define class(Test) < Hello\\n  method(hello):param[test] \\n\\n");
-		test("class Test < Hello\ndef hello(param = 'test', param2 = 'test2')\nend\nend\n","1define class(Test) < Hello\\n  method(hello):param[test] param2[test2] \\n\\n");
-		test("puts \'hello world\'","1.puts(hello world,)\\n");
+		test("class Test < Hello\ndef hello(param = 'test')\nend\nend\n","1define class(Test) < Hello\\n  method(hello):param['test'] \\n\\n");
+		test("class Test < Hello\ndef hello(param = 'test', param2 = 'test2')\nend\nend\n","1define class(Test) < Hello\\n  method(hello):param['test'] param2['test2'] \\n\\n");
+		test("puts \'hello world\'","1.puts('hello world',)\\n");
 		test("puts \"hello world\"","1.puts(\"hello world\",)\\n");
 		test("puts \"hello world\\\"\"","1.puts(\"hello world\"\",)\\n");
 		test("puts \"hello world\", \"hi\"","1.puts(\"hello world\",\"hi\",)\\n"); // function call multiple parameters
-		test("class Test\ndef hello\nputs 'hello'\nend\nend\n","1define class(Test) < \\n  method(hello):.puts(hello,);\\n\\n");
+		test("class Test\ndef hello\nputs 'hello'\nend\nend\n","1define class(Test) < \\n  method(hello):.puts('hello',);\\n\\n");
 		
 		// String escape sequence
 		test("test.puts \"Hello World\\n\"", "1test.puts(\"Hello World\n\",)\\n");
@@ -28,11 +28,12 @@ public class Main {
 		test("test.puts \"Hello World\\u162\"", "1test.puts(\"Hello World¢\",)\\n");
 
 		//multiple statements
-		test("puts \'hello world\';puts \'hi there!'","2.puts(hello world,)\\n.puts(hi there!,)\\n");
+		test("puts \'hello world\';puts \'hi there!'","2.puts('hello world',)\\n.puts('hi there!',)\\n");
 		test("puts(\"test\").to_s","2.puts(\"test\",)\\n.puts(\"test\",).to_s()\\n");
 		test("@arr.compact.to_s","2@arr.compact().to_s()\\n");
 		test("arr.compact.to_s","2arr.compact().to_s()\\n");
-		test("puts arr.to_s;puts(arr.to_s)", "");
+		test("'1'.to_i","1'1'.to_i()\\n");
+//		test("puts arr.to_s;puts(arr.to_s)", "");
 		
 //		System.out.print(Utils.printCommands(commands));
 //		commands = ruby.parse("class Test < Hello\ndef hello\nend\nprotected\ndef hi message, message2\nend\nend\n");

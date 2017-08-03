@@ -35,56 +35,17 @@ public class Parser {
 	private static final int FUNCTION_CALL_W_NEXT_CALL = 26;
 	private static final int FUNCTION_CALL_W_NEXT_PARAM_PAREN = 27;
 	private static final int PARSE_EXPRESSION = 28;
+	private static final int FUNCTION_CALL_ON_LITERAL = 29;
+	private static final int WAIT_EOL = 30;
 
 	int lineno = 1, col = 0;
 
-	public Object parseExpression(int i, ArrayList<Expression> expressions, String rubyExpression) {
-		int currentContext = PARSE_EXPRESSION;
-		Expression expression = null;
-		FunctionCallDefinition functionCallDefinition = null;
-		StringBuffer identifierBuffer = new StringBuffer();
-		for (; i < rubyExpression.length(); i++) {
-			col++;
-			char currentChar = rubyExpression.charAt(i);
-			printChar(currentChar);
-			switch (currentContext) {
-			case PARSE_EXPRESSION:
-				logPrint("PARSE_EXPRESSION");
-				if (currentChar == ' ')
-					continue;
-				if (currentChar == '\n') {
-					lineno++;
-					col = 0;
-					continue;
-				}
-				if (currentChar == '\'') {
-					ConstantStringDefinition constantString = new ConstantStringDefinition();
-					i = parseStringLiteral(constantString, i + 1, rubyExpression);
-					return constantString;
-				}
-				if (currentChar == '\"') {
-					InterpolatedStringDefinition interpString = new InterpolatedStringDefinition();
-					i = parseStringLiteral(interpString, i + 1, rubyExpression);
-					return interpString;
-				}
-				if (isValidVariableStarterCharacter(currentChar)) {
-					currentContext = ASSIGNMENT_OR_CALL;
-					identifierBuffer.append(currentChar);
-					continue;
-				}
-				break;
-			case ASSIGNMENT_OR_CALL:
-				
-				break;
-			}
-		}
-		return i;
-	}
-
-	public int parseStatement(int i, ArrayList<Statement> statements, String rubyExpression) {
+public int parseStatement(int i, ArrayList<Statement> statements, String rubyExpression) {
 		int currentContext = PARSE_STATEMENT;
 		FunctionCallDefinition functionCallDefinition = null;
 		StringBuffer identifierBuffer = new StringBuffer();
+		Object subject = null;
+
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
@@ -114,10 +75,50 @@ public class Parser {
 						continue;
 					}
 				}
+				if (currentChar == '\'') {
+					Pair<Integer, ConstantLiteral> result = evalSingleQuoteLiteral(i, rubyExpression);
+					i = result.first();
+					subject = result.second();
+					currentContext = FUNCTION_CALL_ON_LITERAL;
+					continue;
+				}
+				if (currentChar == '\"') {
+					Pair<Integer, ConstantLiteral> result = evalDoubleQuoteLiteral(i, rubyExpression);
+					i = result.first();
+					subject = result.second();
+					currentContext = FUNCTION_CALL_ON_LITERAL;
+					continue;
+				}
 				if (isValidVariableStarterCharacter(currentChar)) {
 					currentContext = ASSIGNMENT_OR_CALL;
 					identifierBuffer.append(currentChar);
 					continue;
+				}
+				break;
+			case FUNCTION_CALL_ON_LITERAL:
+				logPrint("FUNCTION_CALL_ON_LITERAL");
+				if (currentChar == '.') {
+					Statement command = new Statement(Statement.CALL_OBJECT_FUNCTION);
+					functionCallDefinition = new FunctionCallDefinition();
+					functionCallDefinition.setObject(subject);
+					identifierBuffer = new StringBuffer();
+					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					command.setDetails(functionCallDefinition);
+					statements.add(command);
+					continue;
+				}
+				currentContext = WAIT_EOL;
+				break;
+			case WAIT_EOL:
+				if (currentChar == ' ')
+					continue;
+				if (currentChar == '\n') {
+					lineno++;
+					col = 0;
+					return i;
+				}
+				if (currentChar == ';') {
+					return i;
 				}
 				break;
 			case ASSIGNMENT_OR_CALL:
@@ -208,19 +209,17 @@ public class Parser {
 					}
 				}
 				if (currentChar == '\'') {
-					ConstantStringDefinition constantString = new ConstantStringDefinition();
-					i = parseStringLiteral(constantString, i + 1, rubyExpression);
-					FunctionCallParam functionCallParam = new FunctionCallParam(constantString);
-					functionCallDefinition.addParam(functionCallParam);
+					Pair<Integer, ConstantLiteral> result = evalSingleQuoteLiteral(i, rubyExpression);
+					i = result.first();
+					functionCallDefinition.addParam(new FunctionCallParam(result.second()));
 					currentContext = FUNCTION_CALL_W_NEXT_PARAM;
 					continue;
 				}
 				if (currentChar == '\"') {
-					InterpolatedStringDefinition interpString = new InterpolatedStringDefinition();
-					i = parseStringLiteral(interpString, i + 1, rubyExpression);
-					FunctionCallParam functionCallParam = new FunctionCallParam(interpString);
-					functionCallDefinition.addParam(functionCallParam);
-
+					Pair<Integer, ConstantLiteral> result = evalDoubleQuoteLiteral(i, rubyExpression);
+					i = result.first();
+					functionCallDefinition.addParam(new FunctionCallParam(result.second()));
+					
 					if (currentContext == FUNCTION_CALL_W_PARAM_START_PAREN) {
 						currentContext = FUNCTION_CALL_W_NEXT_PARAM_PAREN;
 					} else {
@@ -279,6 +278,18 @@ public class Parser {
 		}
 		return i;
 	}
+
+private Pair<Integer,ConstantLiteral> evalDoubleQuoteLiteral(int i, String rubyExpression) {
+	InterpolatedStringDefinition interpString = new InterpolatedStringDefinition();
+	i = parseStringLiteral(interpString, i + 1, rubyExpression);
+	return new Pair<Integer,ConstantLiteral>(i, interpString);
+}
+
+private Pair<Integer,ConstantLiteral> evalSingleQuoteLiteral(int i, String rubyExpression) {
+	ConstantStringDefinition constantString = new ConstantStringDefinition();
+	i = parseStringLiteral(constantString, i + 1, rubyExpression);
+	return new Pair<Integer,ConstantLiteral>(i, constantString);
+}
 
 	private int parseClassDefinition(ClassDefinition classDefinition, int index, String rubyExpression) {
 		int i = index;

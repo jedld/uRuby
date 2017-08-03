@@ -8,12 +8,6 @@ public class FunctionCallParam {
 	}
 	
 	public String toString() {
-		if (value instanceof ConstantStringDefinition) {
-			return ((ConstantStringDefinition)value).toString();
-		}
-		if (value instanceof InterpolatedStringDefinition) {
-			return "\"" + ((InterpolatedStringDefinition)value).toString() + "\"";
-		}
 		return value.toString();
 	}
 }
