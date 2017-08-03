@@ -3,6 +3,7 @@ package org.mruby;
 import java.util.ArrayList;
 
 import org.mruby.parser.Statement;
+import org.mruby.parser.Pair;
 import org.mruby.parser.Parser;
 
 public class Ruby {
@@ -17,11 +18,10 @@ public class Ruby {
 		int i = 0;
 		for(; i < rubyExpression.length(); i++) {
 			if (!rubyExpression.endsWith("\n")) {
-				i = parser.parseStatement(i, statements, rubyExpression + "\n");
+				i = parser.parseStatements(i, statements, rubyExpression + "\n");
 			} else {
-				i = parser.parseStatement(i, statements, rubyExpression);
+				i = parser.parseStatements(i, statements, rubyExpression);
 			}
-			
 		}
 		return statements;
 	}

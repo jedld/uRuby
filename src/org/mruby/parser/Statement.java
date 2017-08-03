@@ -4,6 +4,7 @@ public class Statement {
 	public static final int DEFINE_CLASS = 1;
 	public static final int CALL_SELF_FUNCTION = 2;
 	public static final int CALL_OBJECT_FUNCTION = 3;
+	public static final int EVALUATE_EXPRESSION = 4;
 	private int code;
 	private Object details;
 
@@ -41,7 +42,7 @@ public class Statement {
 				}
 				strBuilder.append("\\n");
 			}
-		} else if (code == CALL_SELF_FUNCTION || code == CALL_OBJECT_FUNCTION) {
+		} else if (code == EVALUATE_EXPRESSION) {
 			FunctionCallDefinition definition = (FunctionCallDefinition) details;
 			if (definition.nextObject == null) {
 				strBuilder.append(definition.toString());
