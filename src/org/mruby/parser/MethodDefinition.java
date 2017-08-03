@@ -9,6 +9,8 @@ public class MethodDefinition {
 	
 	StringBuilder name = new StringBuilder();
 	ArrayList<ParameterDefinition> parameters = new ArrayList<>();
+	ArrayList<Statement> statements = new ArrayList<>();
+	
 	private int section;
 	
 	public MethodDefinition(int section) {
@@ -25,5 +27,9 @@ public class MethodDefinition {
 
 	public void addParameter(ParameterDefinition parameterDefinition) {
 		parameters.add(parameterDefinition);
+	}
+	
+	public void addStatement(Statement statement) {
+		statements.add(statement);
 	}
 }

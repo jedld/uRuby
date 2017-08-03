@@ -1,12 +1,12 @@
 package org.mruby.parser;
 
-public class Command {
+public class Statement {
 	public static final int DEFINE_CLASS = 1;
 	public static final int CALL_SELF_FUNCTION = 2;
 	private int code;
 	private Object details;
 
-	public Command(int command) {
+	public Statement(int command) {
 		this.code = command;
 	}
 
@@ -34,6 +34,9 @@ public class Command {
 						strBuilder.append("[" + parameter.getDefaultValue().toString() + "]");
 					}
 					strBuilder.append(" ");
+				}
+				for(Statement statement : method.statements) {
+					strBuilder.append(statement.toString() + ";");
 				}
 				strBuilder.append("\\n");
 			}

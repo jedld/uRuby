@@ -7,7 +7,7 @@ import org.mruby.parser.exception.ParseException;
 import org.mruby.utils.Utils;
 
 public class Parser {
-	private static final int EMPTY_CONTEXT = 1;
+	private static final int PARSE_STATEMENT = 1;
 	private static final int CLASS_DEFINITION_CLASS_W_NAME = 2;
 	private static final int CLASS_DEFINITION_CLASS_DEFINE_NAME = 3;
 	private static final int CLASS_DEFINITION_CLASS_DEFINE_BODY = 4;
@@ -27,39 +27,41 @@ public class Parser {
 	private static final int FUNCTION_CALL_W_PARAM = 18;
 	private static final int FUNCTION_CALL = 19;
 	private static final int FUNCTION_CALL_W_NEXT_PARAM = 20;
+	private static final int PARSE_ESCAPE_SEQUENCE = 21;
+	private static final int PARSE_ESCAPE_CHARACTER_CODE = 22;
 
 
 	int lineno = 1, col = 0;
 
-	public ArrayList<Command> parse(String rubyExpression) {
-		int currentContext = EMPTY_CONTEXT;
-		MethodDefinition methodDefinition = null;
-		ParameterDefinition parameterDefinition = null;
+	public int parseStatement(int i, ArrayList<Statement> statements, String rubyExpression) {
+		int currentContext = PARSE_STATEMENT;
 		FunctionCallDefinition functionCallDefinition = null;
 		StringBuffer identifierBuffer = new StringBuffer();
-		ArrayList<Command> commandList = new ArrayList<>();
-		for (int i = 0; i < rubyExpression.length(); i++) {
+		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
 			switch (currentContext) {
-			case EMPTY_CONTEXT:
-				logPrint("EMPTY_CONTEXT");
+			case PARSE_STATEMENT:
+				logPrint("PARSE_STATEMENT");
 				if (currentChar == ' ')
 					continue;
 				if (currentChar == '\n') {
 					lineno++;
 					col = 0;
-					continue;
+					return i + i;
+				}
+				if (currentChar == ';') {
+					return i;
 				}
 				if (currentChar == 'c') {
 					if (Utils.checkString(rubyExpression, i, "class")) {
 						i += "class".length();
 						ClassDefinition classDefinition = new ClassDefinition();
 						i = parseClassDefinition(classDefinition, i, rubyExpression);
-						currentContext = EMPTY_CONTEXT;
-						Command command = new Command(Command.DEFINE_CLASS);
+						currentContext = PARSE_STATEMENT;
+						Statement command = new Statement(Statement.DEFINE_CLASS);
 						command.setDetails(classDefinition);
-						commandList.add(command);
+						statements.add(command);
 						continue;
 					}
 				}
@@ -76,20 +78,19 @@ public class Parser {
 					continue;
 				}
 				
-				Command command = new Command(Command.CALL_SELF_FUNCTION);
+				Statement command = new Statement(Statement.CALL_SELF_FUNCTION);
 				functionCallDefinition = new FunctionCallDefinition();
 				functionCallDefinition.setName(identifierBuffer.toString());
 				identifierBuffer = new StringBuffer();
 				command.setDetails(functionCallDefinition);
-				commandList.add(command);
+				statements.add(command);
 				
 				if (currentChar == ' ') {
 					currentContext = FUNCTION_CALL_W_PARAM;
 					continue;
 				}
 				if (currentChar == '\n') {
-					currentContext = EMPTY_CONTEXT;
-					continue;
+					return i + 1;
 				}
 				break;
 			case FUNCTION_CALL_W_PARAM:
@@ -98,12 +99,20 @@ public class Parser {
 					continue;
 				}
 				if (currentChar == '\n') {
-					currentContext = EMPTY_CONTEXT;
+					return i + i;
 				}
 				if (currentChar == '\'') {
 					ConstantStringDefinition constantString = new ConstantStringDefinition();
 					i = parseStringLiteral(constantString, i + 1, rubyExpression);
 					FunctionCallParam functionCallParam = new FunctionCallParam(constantString);
+					functionCallDefinition.addParam(functionCallParam);
+					currentContext = FUNCTION_CALL_W_NEXT_PARAM;
+					continue;
+				}
+				if (currentChar == '\"') {
+					InterpolatedStringDefinition interpString = new InterpolatedStringDefinition();
+					i = parseStringLiteral(interpString, i + 1, rubyExpression);
+					FunctionCallParam functionCallParam = new FunctionCallParam(interpString);
 					functionCallDefinition.addParam(functionCallParam);
 					currentContext = FUNCTION_CALL_W_NEXT_PARAM;
 					continue;
@@ -115,8 +124,7 @@ public class Parser {
 					continue;
 				}
 				if (currentChar == '\n') {
-					currentContext = EMPTY_CONTEXT;
-					continue;
+					return i + 1;
 				}
 				if (currentChar == ',') {
 					currentContext = FUNCTION_CALL_W_PARAM;
@@ -125,7 +133,7 @@ public class Parser {
 				break;
 			}
 		}
-		return commandList;
+		return i;
 	}
 
 	private int parseClassDefinition(ClassDefinition classDefinition, int index, String rubyExpression) {
@@ -243,7 +251,7 @@ public class Parser {
 				} else if (currentChar == 'e') {
 					if (Utils.checkString(rubyExpression, i, "end")) {
 						i += "end".length();
-						currentContext = EMPTY_CONTEXT;
+						currentContext = PARSE_STATEMENT;
 						return i;
 					}
 				} else if (currentChar == 'p') {
@@ -331,6 +339,7 @@ public class Parser {
 						continue;
 					}
 				}
+				i = parseStatement(i, methodDefinition.statements, rubyExpression);
 				break;
 			}
 		}
@@ -442,21 +451,48 @@ public class Parser {
 		return i;
 	}
 
-	private int parseStringLiteral(ConstantStringDefinition constantString, int index, String rubyExpression) {
+	private int parseStringLiteral(ConstantLiteral constantString, int index, String rubyExpression) {
 		int currentContext = PARSE_STRING_LITERAL;
 		int i = index;
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
+			final char delimiter = constantString instanceof ConstantStringDefinition ? '\'' : '"';
 //			System.out.print(currentChar + " ");
 			switch (currentContext) {
 				case PARSE_STRING_LITERAL:
 					logPrint("PARSE_STRING_LITERAL");
-					if (currentChar == '\'') {
+					if (currentChar == delimiter) {
 						return i;
+					}
+					if (currentChar == '\\') {
+						currentContext = PARSE_ESCAPE_SEQUENCE;
+						continue;
 					}
 					constantString.appendValue(currentChar);
 				break;
+				case PARSE_ESCAPE_SEQUENCE:
+					logPrint("PARSE_STRING_LITERAL");
+					if (currentChar == '\\') {
+						constantString.appendValue('\\');
+						currentContext = PARSE_STRING_LITERAL;
+						continue;
+					}
+					if (currentChar == '"') {
+						constantString.appendValue('"');
+						currentContext = PARSE_STRING_LITERAL;
+						continue;
+					}
+					if (currentChar == '\'') {
+						constantString.appendValue('\'');
+						currentContext = PARSE_STRING_LITERAL;
+						continue;
+					}
+					if (Character.isDigit(currentChar)) {
+						currentContext = PARSE_ESCAPE_CHARACTER_CODE;
+						continue;
+					}
+					break;
 			}
 		}
 		return i;

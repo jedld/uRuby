@@ -3,7 +3,7 @@ package mRuby;
 import java.util.ArrayList;
 
 import org.mruby.Ruby;
-import org.mruby.parser.Command;
+import org.mruby.parser.Statement;
 import org.mruby.parser.exception.ParseException;
 import org.mruby.utils.Utils;
 
@@ -17,6 +17,14 @@ public class Main {
 		test("class Test < Hello\ndef hello(param = 'test')\nend\nend\n","define class(Test) < Hello\\n  method(hello):param[test] \\n\\n");
 		test("class Test < Hello\ndef hello(param = 'test', param2 = 'test2')\nend\nend\n","define class(Test) < Hello\\n  method(hello):param[test] param2[test2] \\n\\n");
 		test("puts \'hello world\'","call local puts:hello world \\n");
+		test("puts \"hello world\"","call local puts:\"hello world\" \\n");
+		test("puts \"hello world\\\"\"","call local puts:\"hello world\"\" \\n");
+		test("puts \"hello world\", \"hi\"","call local puts:\"hello world\" \"hi\" \\n"); // function call multiple parameters
+		test("class Test\ndef hello\nputs 'hello'\nend\nend\n","define class(Test) < \\n  method(hello):call local puts:hello ;\\n\\n");
+		
+		//multiple statements
+		test("puts \'hello world\';puts \'hi there!'","");
+		
 //		System.out.print(Utils.printCommands(commands));
 //		commands = ruby.parse("class Test < Hello\ndef hello\nend\nprotected\ndef hi message, message2\nend\nend\n");
 //		System.out.print(Utils.printCommands(commands));
@@ -31,7 +39,7 @@ public class Main {
 
 	public static boolean test(String expression, String expected) {
 		Ruby ruby = new Ruby();
-		ArrayList<Command> commands = ruby.parse(expression);
+		ArrayList<Statement> commands = ruby.parse(expression);
 		String actual = Utils.printCommands(commands);
 		if (!actual.equals(expected)) {
 			System.out.println("failed:\n");

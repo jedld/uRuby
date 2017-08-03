@@ -2,7 +2,7 @@ package org.mruby.utils;
 
 import java.util.List;
 
-import org.mruby.parser.Command;
+import org.mruby.parser.Statement;
 
 public class Utils {
 
@@ -17,9 +17,9 @@ public class Utils {
 		return false;
 	}
 
-	public static String printCommands(List<Command> commands) {
+	public static String printCommands(List<Statement> commands) {
 		StringBuilder commandsStr =new StringBuilder();
-		for(Command command : commands) {
+		for(Statement command : commands) {
 			commandsStr.append(command.toString() + "\\n");
 		}
 		return commandsStr.toString();
