@@ -39,6 +39,7 @@ public class Parser {
 	private static final int WAIT_EOL = 30;
 	private static final int CAPTURE_NUMERIC_LITERAL = 31;
 	private static final int CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR = 32;
+	private static final int FUNCTION_CALL_WAIT_FOR_DOT = 33;
 
 	int lineno = 1, col = 0;
 
@@ -186,6 +187,17 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					continue;
 				}
 
+				if (currentChar==';') {
+					functionCallDefinition = new FunctionCallDefinition();
+					functionCallDefinition.setName(identifierBuffer.toString());
+					return new Pair<Integer, Object>(i, functionCallDefinition);
+				}
+				
+				if (currentChar == '\n') {
+					currentContext = FUNCTION_CALL_WAIT_FOR_DOT;
+					continue;
+				}
+				
 				if (currentChar == '.') {
 					functionCallDefinition = new FunctionCallDefinition();
 					functionCallDefinition.setObject(identifierBuffer.toString());
@@ -208,10 +220,24 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					currentContext = FUNCTION_CALL_W_PARAM_START_PAREN;
 					continue;
 				}
-				if (currentChar == '\n') {
-					return new Pair<Integer, Object>(i, output);
-				}
 				break;
+			case FUNCTION_CALL_WAIT_FOR_DOT:
+				logPrint("FUNCTION_CALL_WAIT_FOR_DOT");
+				if (currentChar == ' ') {
+					continue;
+				}
+				if (currentChar == '\n') {
+					continue;
+				}
+				if (currentChar == '.') {
+					functionCallDefinition = new FunctionCallDefinition();
+					functionCallDefinition.setObject(identifierBuffer.toString());
+					identifierBuffer = new StringBuffer();
+					currentContext = CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR;
+					output = functionCallDefinition;
+					continue;
+				}
+				return new Pair<Integer, Object>(i, output);
 			case CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR:
 				logPrint("CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR");
 				if (isAlphaOrNumeric(currentChar)) {

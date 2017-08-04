@@ -21,7 +21,7 @@ public class Main {
 		test("puts \"hello world\\\"\"","1.puts(\"hello world\"\",)\\n");
 		test("puts \"hello world\", \"hi\"","1.puts(\"hello world\",\"hi\",)\\n"); // function call multiple parameters
 		test("class Test\ndef hello\nputs 'hello'\nend\nend\n","1define class(Test) < \\n  method(hello):.puts('hello',);\\n\\n");
-		
+		test("puts;","1.puts()\\n");
 		// String escape sequence
 		test("test.puts \"Hello World\\n\"", "1test.puts(\"Hello World\n\",)\\n");
 		test("test.puts \"Hello World\\\\\"", "1test.puts(\"Hello World\\\",)\\n");
@@ -41,6 +41,10 @@ public class Main {
 		//lambda call
 		test("obj.()","1obj.call()\\n");
 		
+		//formatting test
+		test("hello\n   .world()","1hello.world()\\n");
+		test("hello.world\n   .sort()","");
+		
 //		System.out.print(Utils.printCommands(commands));
 //		commands = ruby.parse("class Test < Hello\ndef hello\nend\nprotected\ndef hi message, message2\nend\nend\n");
 //		System.out.print(Utils.printCommands(commands));
@@ -54,6 +58,7 @@ public class Main {
 	}
 
 	public static boolean test(String expression, String expected) {
+		System.out.println("---------------------------");
 		Ruby ruby = new Ruby();
 		ArrayList<Statement> commands = ruby.parse(expression);
 		String actual = Utils.printCommands(commands);
