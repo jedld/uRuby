@@ -3,6 +3,7 @@ package org.mruby;
 import java.util.ArrayList;
 
 import org.mruby.parser.Statement;
+import org.mruby.parser.Block;
 import org.mruby.parser.Pair;
 import org.mruby.parser.Parser;
 
@@ -12,18 +13,22 @@ public class Ruby {
 		
 	}
 
-	public static ArrayList<Statement> parse(String rubyExpression) {
+	public static RubyProgram parse(String rubyExpression) {
 		Parser parser = new Parser();
-		ArrayList<Statement> statements = new ArrayList<Statement>();
 		int i = 0;
+		RubyProgram program = new RubyProgram();
 		for(; i < rubyExpression.length(); i++) {
 			if (!rubyExpression.endsWith("\n")) {
-				i = parser.parseStatements(i, statements, rubyExpression + "\n");
+				Pair<Integer, Block> result = parser.parseStatements(i,  rubyExpression + "\n");
+				i = result.first();
+				program.addBlock(result.second());
 			} else {
-				i = parser.parseStatements(i, statements, rubyExpression);
+				Pair<Integer, Block> result = parser.parseStatements(i, rubyExpression);
+				i = result.first();
+				program.addBlock(result.second());
 			}
 		}
-		return statements;
+		return program;
 	}
 
 	public void printIR() {

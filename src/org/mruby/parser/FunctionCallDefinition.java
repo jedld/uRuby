@@ -5,8 +5,9 @@ import java.util.List;
 
 public class FunctionCallDefinition {
 	String name;
-	Object object, nextObject;
+	Object object, nextObject, altObject;
 	ArrayList<FunctionCallParam> params = new ArrayList<>();
+	private boolean isReference;
 	
 	public void setName(String name) {
 		this.name = name;
@@ -41,8 +42,11 @@ public class FunctionCallDefinition {
 		if (object!=null) {
 			strBuffer.append(object.toString() + "." + name);
 		} else {
-			strBuffer.append("." + name);
+			strBuffer.append(name);
 		}
+		
+		if (isReference) return strBuffer.toString();
+		
 		strBuffer.append("(");
 		for(FunctionCallParam param : getParams()) {
 			strBuffer.append(param.toString() + ",");
@@ -53,5 +57,13 @@ public class FunctionCallDefinition {
 
 	public void setNextObject(FunctionCallDefinition functionCallDefinition) {
 		this.nextObject = functionCallDefinition;	
+	}
+
+	public void setReference(boolean isReference) {
+		this.isReference = isReference;
+	}
+
+	public void setAltObject(Object altObject) {
+		this.altObject = altObject;
 	}
 }

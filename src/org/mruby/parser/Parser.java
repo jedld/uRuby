@@ -40,11 +40,16 @@ public class Parser {
 	private static final int CAPTURE_NUMERIC_LITERAL = 31;
 	private static final int CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR = 32;
 	private static final int FUNCTION_CALL_WAIT_FOR_DOT = 33;
+	private static final int ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE = 34;
+	private static final int READ_IF_CONDITION = 35;
+	private static final int EVAL_IF_BLOCK_CONDITION = 36;
 
 	int lineno = 1, col = 0;
 
-	public int parseStatements(int i, ArrayList<Statement> statements, String rubyExpression) {
+	public Pair<Integer, Block> parseStatements(int i, String rubyExpression) {
+		ArrayList<Statement> statements = new ArrayList<Statement>();
 		int currentContext = PARSE_STATEMENT;
+		Object subject = null;
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
@@ -57,16 +62,19 @@ public class Parser {
 				if (currentChar == '\n') {
 					lineno++;
 					col = 0;
-					return i;
+					continue;
 				}
 				if (currentChar == ';') {
-					return i;
+					continue;
 				}
+
 				if (currentChar == 'c') {
 					if (Utils.checkString(rubyExpression, i, "class")) {
-						i += "class".length();
+						i += 5;
 						ClassDefinition classDefinition = new ClassDefinition();
+						logPrint("eval class");
 						i = parseClassDefinition(classDefinition, i, rubyExpression);
+						logPrint("end eval class");
 						currentContext = PARSE_STATEMENT;
 						Statement command = new Statement(Statement.DEFINE_CLASS);
 						command.setDetails(classDefinition);
@@ -74,32 +82,38 @@ public class Parser {
 						continue;
 					}
 				}
-				
+
 				if (currentChar == 'e') {
 					if (Utils.checkString(rubyExpression, i, "end")) {
-						return i - 1;
+						return new Pair<Integer, Block>(i + 3, new Block(statements, "end"));
+					} else if (Utils.checkString(rubyExpression, i, "else")) {
+						return new Pair<Integer, Block>(i + 4, new Block(statements, "else"));
+					} else if (Utils.checkString(rubyExpression, i, "elsif")) {
+						return new Pair<Integer, Block>(i + 5, new Block(statements, "elsif"));
 					}
 				}
+
 				logPrint("eval");
-				Pair<Integer, Object> result = parseExpression(i, rubyExpression);
+				Pair<Integer, Object> result = parseExpression(i, subject, rubyExpression, false);
 				logPrint("end");
 				i = result.first();
 				Statement command = new Statement(Statement.EVALUATE_EXPRESSION);
+				subject = result.second();
 				command.setDetails(result.second());
 				statements.add(command);
 				break;
 			}
 		}
-		return i;
+		return new Pair<Integer, Block>(i, new Block(statements));
 	}
-	
-public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
-		
+
+	public Pair<Integer, Object> parseExpression(int i, Object subject, String rubyExpression, boolean exitOnNewLine) {
+		logPrint("subject " + subject);
 		int currentContext = PARSE_STATEMENT;
-		FunctionCallDefinition functionCallDefinition = null;
+		FunctionCallDefinition operation = null;
 		StringBuffer identifierBuffer = new StringBuffer();
-		Object subject = null, output = null;
-		
+		Object output = null;
+
 		for (; i < rubyExpression.length(); i++) {
 			col++;
 			char currentChar = rubyExpression.charAt(i);
@@ -107,6 +121,45 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 			switch (currentContext) {
 			case PARSE_STATEMENT:
 				logPrint("PARSE_STATEMENT");
+				if (currentChar == '#') {
+					i = parseCommentSection(i, rubyExpression);
+					continue;
+				}
+
+				if (currentChar == 'i') {
+					if (Utils.checkString(rubyExpression, i, "if")) {
+						i += 2;
+						IfBranch ifOperation = new IfBranch();
+						ifOperation.setObject(operation);
+						operation = ifOperation;
+						output = ifOperation;
+						currentContext = EVAL_IF_BLOCK_CONDITION;
+						continue;
+					}
+				}
+
+				if (currentChar == '!') {
+					operation = new NotFunction();
+					operation.setName("!");
+					output = operation;
+					currentContext = FUNCTION_CALL_W_PARAM;
+					continue;
+				}
+
+				if (currentChar == ' ') {
+					continue;
+				}
+				if (currentChar == '.') {
+					operation = new FunctionCallDefinition();
+					operation.setObject(subject);
+					if (subject instanceof FunctionCallDefinition) {
+						((FunctionCallDefinition) subject).setNextObject(operation);
+					}
+					identifierBuffer = new StringBuffer();
+					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					output = operation;
+					continue;
+				}
 				if (currentChar == '\'') {
 					Pair<Integer, ConstantLiteral> result = evalSingleQuoteLiteral(i, rubyExpression);
 					i = result.first();
@@ -144,7 +197,7 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					identifierBuffer.append(currentChar);
 					continue;
 				}
-				
+
 				NumericLiteral numeric = new NumericLiteral(identifierBuffer.toString());
 				output = numeric;
 				currentContext = FUNCTION_CALL_ON_LITERAL;
@@ -153,21 +206,22 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 				if (currentChar == ')') {
 					return new Pair<Integer, Object>(i - 1, output);
 				}
-				
+
 				if (currentChar == ' ') {
 					continue;
 				}
 				if (currentChar == '.') {
-					functionCallDefinition = new FunctionCallDefinition();
-					functionCallDefinition.setObject(subject);
+					operation = new FunctionCallDefinition();
+					operation.setObject(subject);
 					identifierBuffer = new StringBuffer();
 					currentContext = CAPUTRE_METHOD_CALL_NAME;
-					output = functionCallDefinition;
+					output = operation;
 					continue;
 				}
-				
+
 				currentContext = WAIT_EOL;
 			case WAIT_EOL:
+				logPrint("WAIT_EOL");
 				if (currentChar == ' ')
 					continue;
 				if (currentChar == '\n') {
@@ -175,41 +229,68 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					col = 0;
 					return new Pair<Integer, Object>(i, output);
 				}
-				if (currentChar == ';' || currentChar == ',') {
-					return new Pair<Integer, Object>(i - 1, output);
-				}
 
-				break;
+				return new Pair<Integer, Object>(i - 1, output);
 			case ASSIGNMENT_OR_CALL:
 				logPrint("ASSIGNMENT_OR_CALL");
+				if (currentChar == 't') {
+					if (Utils.checkString(rubyExpression, i, "true")) {
+						output = new TrueLiteral();
+						i += "true".length() + 1;
+						currentContext = FUNCTION_CALL_W_PARAM;
+						continue;
+					}
+				}
+
+				if (currentChar == 'f') {
+					if (Utils.checkString(rubyExpression, i, "false")) {
+						output = new FalseLiteral();
+						i += "false".length() + 1;
+						currentContext = FUNCTION_CALL_W_PARAM;
+						continue;
+					}
+				}
+
 				if (isAlphaOrNumeric(currentChar)) {
 					identifierBuffer.append(currentChar);
 					continue;
 				}
 
-				if (currentChar==';') {
-					functionCallDefinition = new FunctionCallDefinition();
-					functionCallDefinition.setName(identifierBuffer.toString());
-					return new Pair<Integer, Object>(i, functionCallDefinition);
+				if (currentChar == '=') {
+					operation = new AssignmentOperation();
+					operation.setObject(identifierBuffer.toString());
+					output = operation;
+					currentContext = ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE;
+					continue;
 				}
-				
+
+				if (currentChar == ';') {
+					operation = new FunctionCallDefinition();
+					operation.setName(identifierBuffer.toString());
+					return new Pair<Integer, Object>(i, operation);
+				}
+
 				if (currentChar == '\n') {
 					currentContext = FUNCTION_CALL_WAIT_FOR_DOT;
+					operation = new FunctionCallDefinition();
+					operation.setName(identifierBuffer.toString());
+					output = operation;
+					if (exitOnNewLine) return new Pair<Integer, Object>(i, operation);
 					continue;
 				}
-				
+
 				if (currentChar == '.') {
-					functionCallDefinition = new FunctionCallDefinition();
-					functionCallDefinition.setObject(identifierBuffer.toString());
+					operation = new FunctionCallDefinition();
+					operation.setObject(identifierBuffer.toString());
 					identifierBuffer = new StringBuffer();
 					currentContext = CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR;
-					output = functionCallDefinition;
+					output = operation;
 					continue;
 				} else {
-					functionCallDefinition = new FunctionCallDefinition();
-					functionCallDefinition.setName(identifierBuffer.toString());
+					operation = new FunctionCallDefinition();
+					operation.setName(identifierBuffer.toString());
 					identifierBuffer = new StringBuffer();
-					output = functionCallDefinition;
+					output = operation;
 				}
 
 				if (currentChar == ' ') {
@@ -221,6 +302,22 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					continue;
 				}
 				break;
+			case ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE:
+				logPrint("ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE");
+				if (currentChar == ' ') {
+					continue;
+				}
+				if (currentChar == '\n') {
+					continue;
+				}
+
+				logPrint("eval");
+				Pair<Integer, Object> result = parseExpression(i, subject, rubyExpression, exitOnNewLine);
+				logPrint("end");
+				i = result.first();
+				subject = result.second();
+				operation.addParam(new FunctionCallParam(result.second()));
+				return new Pair<Integer, Object>(i, output);
 			case FUNCTION_CALL_WAIT_FOR_DOT:
 				logPrint("FUNCTION_CALL_WAIT_FOR_DOT");
 				if (currentChar == ' ') {
@@ -230,23 +327,34 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					continue;
 				}
 				if (currentChar == '.') {
-					functionCallDefinition = new FunctionCallDefinition();
-					functionCallDefinition.setObject(identifierBuffer.toString());
+					FunctionCallDefinition newfunctionCallDefinition = new FunctionCallDefinition();
+					newfunctionCallDefinition.setObject(operation);
+					operation.setNextObject(newfunctionCallDefinition);
+					newfunctionCallDefinition.setName(identifierBuffer.toString());
+					output = newfunctionCallDefinition;
+					operation = newfunctionCallDefinition;
 					identifierBuffer = new StringBuffer();
 					currentContext = CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR;
-					output = functionCallDefinition;
 					continue;
 				}
-				return new Pair<Integer, Object>(i, output);
+				return new Pair<Integer, Object>(i - 1, output);
 			case CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR:
 				logPrint("CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR");
+				if (currentChar == ' ')
+					continue;
+				if (currentChar == '\n') {
+					lineno++;
+					continue;
+				}
+				;
+
 				if (isAlphaOrNumeric(currentChar)) {
 					identifierBuffer.append(currentChar);
 					currentContext = CAPUTRE_METHOD_CALL_NAME;
 					continue;
 				}
 				if (currentChar == '(') {
-					functionCallDefinition.setName("call");
+					operation.setName("call");
 					currentContext = FUNCTION_CALL_W_PARAM_START_PAREN;
 					continue;
 				}
@@ -256,17 +364,25 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					identifierBuffer.append(currentChar);
 					continue;
 				}
-				
+
+				if (validMethodLastCharacter(currentChar)) {
+					identifierBuffer.append(currentChar);
+					System.out.println("set name" + identifierBuffer.toString());
+					operation.setName(identifierBuffer.toString());
+					currentContext = FUNCTION_CALL_W_PARAM;
+					continue;
+				}
+
 				System.out.println("set name" + identifierBuffer.toString());
-				functionCallDefinition.setName(identifierBuffer.toString());
+				operation.setName(identifierBuffer.toString());
 
 				if (currentChar == '.') {
 					FunctionCallDefinition newFunctionCallDefinition = new FunctionCallDefinition();
-					functionCallDefinition.setNextObject(newFunctionCallDefinition);
-					newFunctionCallDefinition.setObject(functionCallDefinition);
-					functionCallDefinition = newFunctionCallDefinition;
+					operation.setNextObject(newFunctionCallDefinition);
+					newFunctionCallDefinition.setObject(operation);
+					operation = newFunctionCallDefinition;
 					identifierBuffer = new StringBuffer();
-					currentContext = CAPUTRE_METHOD_CALL_NAME;
+					currentContext = CAPUTRE_METHOD_CALL_NAME_FIRST_CHAR;
 					output = newFunctionCallDefinition;
 				}
 
@@ -278,6 +394,7 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					currentContext = FUNCTION_CALL_W_PARAM_START_PAREN;
 					continue;
 				}
+
 				if (currentChar == '\n' || currentChar == ';') {
 					return new Pair<Integer, Object>(i - 1, output);
 				}
@@ -286,6 +403,43 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 				logPrint("FUNCTION_CALL_W_PARAM_START_PAREN");
 			case FUNCTION_CALL_W_PARAM:
 				logPrint("FUNCTION_CALL_W_PARAM");
+
+				if (currentChar == '=') {
+					AssignmentOperation assignmentOperation = new AssignmentOperation();
+					operation.setReference(true);
+					assignmentOperation.setObject(operation);
+					output = assignmentOperation;
+					operation = assignmentOperation;
+					currentContext = ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE;
+					continue;
+				}
+
+				if (currentChar == '-') {
+					if (Utils.checkString(rubyExpression, i, "-=")) {
+						i += 2;
+						SubAssignmentOperation assignmentOperation = new SubAssignmentOperation();
+						operation.setReference(true);
+						assignmentOperation.setObject(operation);
+						output = assignmentOperation;
+						operation = assignmentOperation;
+						currentContext = ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE;
+						continue;
+					}
+				}
+
+				if (currentChar == '+') {
+					if (Utils.checkString(rubyExpression, i, "+=")) {
+						i += 2;
+						AddAssignmentOperation assignmentOperation = new AddAssignmentOperation();
+						operation.setReference(true);
+						assignmentOperation.setObject(operation);
+						output = assignmentOperation;
+						operation = assignmentOperation;
+						currentContext = ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE;
+						continue;
+					}
+				}
+
 				if (currentChar == ' ') {
 					continue;
 				}
@@ -300,26 +454,27 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					}
 					throw new ParseException(col, lineno, "unexpected )");
 				}
-				
+
 				if (currentContext == FUNCTION_CALL_W_PARAM_START_PAREN) {
 					currentContext = FUNCTION_CALL_W_NEXT_PARAM_PAREN;
 				} else {
 					currentContext = FUNCTION_CALL_W_NEXT_PARAM;
 				}
-				
+
 				logPrint("eval");
-				Pair<Integer, Object> result = parseExpression(i, rubyExpression);
+				result = parseExpression(i, subject, rubyExpression, exitOnNewLine);
 				logPrint("end");
 				i = result.first();
-				functionCallDefinition.addParam(new FunctionCallParam(result.second()));
+				subject = result.second();
+				operation.addParam(new FunctionCallParam(result.second()));
 				break;
 			case FUNCTION_CALL_W_NEXT_CALL:
 				logPrint("FUNCTION_CALL_W_NEXT_CALL");
 				if (currentChar == '.') {
 					currentContext = FUNCTION_CALL_W_PARAM;
 					FunctionCallDefinition newFunctionCallDefinition = new FunctionCallDefinition();
-					newFunctionCallDefinition.setObject(functionCallDefinition);
-					functionCallDefinition = newFunctionCallDefinition;
+					newFunctionCallDefinition.setObject(operation);
+					operation = newFunctionCallDefinition;
 					identifierBuffer = new StringBuffer();
 					currentContext = CAPUTRE_METHOD_CALL_NAME;
 					output = newFunctionCallDefinition;
@@ -338,6 +493,22 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 				logPrint("FUNCTION_CALL_W_NEXT_PARAM_PAREN");
 			case FUNCTION_CALL_W_NEXT_PARAM:
 				logPrint("FUNCTION_CALL_W_NEXT_PARAM");
+				if (currentChar == '#') {
+					i = parseCommentSection(i, rubyExpression);
+					return new Pair<Integer, Object>(i, output);
+				}
+				if (currentChar == 'e') {
+					if (Utils.checkString(rubyExpression, i, "end")) {
+						return new Pair<Integer, Object>(i - 1, output);
+					}
+					if (Utils.checkString(rubyExpression, i, "else")) {
+						return new Pair<Integer, Object>(i - 1, output);
+					}
+					if (Utils.checkString(rubyExpression, i, "elsif")) {
+						return new Pair<Integer, Object>(i - 1, output);
+					}
+				}
+
 				if (currentChar == ' ') {
 					continue;
 				}
@@ -358,23 +529,86 @@ public Pair<Integer, Object> parseExpression(int i, String rubyExpression) {
 					}
 					throw new ParseException(col, lineno, "unexpected token )");
 				}
+				if (currentChar == 'i') {
+					if (Utils.checkString(rubyExpression, i, "if")) {
+						i += 2;
+						IfBranch ifOperation = new IfBranch();
+						ifOperation.setObject(operation);
+						operation = ifOperation;
+						output = ifOperation;
+						currentContext = READ_IF_CONDITION;
+						continue;
+					}
+				}
+				break;
+			case READ_IF_CONDITION:
+				logPrint("READ_IF_CONDITION");
+				logPrint("eval");
+				result = parseExpression(i, null, rubyExpression, false);
+				logPrint("end");
+				i = result.first();
+				subject = result.second();
+				operation.addParam(new FunctionCallParam(result.second()));
+				return new Pair<Integer, Object>(i, output);
+			case EVAL_IF_BLOCK_CONDITION:
+				logPrint("EVAL_IF_BLOCK_CONDITION");
+				logPrint("EVAL_IF_BLOCK_CONDITION eval");
+				result = parseExpression(i, null, rubyExpression, true);
+				logPrint("EVAL_IF_BLOCK_CONDITION end");
+				i = result.first();
+				subject = result.second();
+				operation.addParam(new FunctionCallParam(result.second()));
+				logPrint("READ_IF_BODY");
+
+				Pair<Integer, Block> statementResult = parseStatements(i, rubyExpression);
+				i = statementResult.first();
+				operation.setObject(statementResult.second());
+				currentContext = PARSE_EXPRESSION;
+				
+				if (statementResult.second().getEndString().equals("else")) {
+					logPrint("READ_ELSE_BODY");
+					Pair<Integer, Block> elseStatementResult = parseStatements(i, rubyExpression);
+					i = elseStatementResult.first();
+					operation.setAltObject(elseStatementResult.second());
+				} else if (statementResult.second().getEndString().equals("elsif")) {
+					logPrint("READ_ELSEIF");
+					IfBranch ifOperation = new IfBranch();
+					operation.setAltObject(ifOperation);
+					operation = ifOperation;
+					currentContext = EVAL_IF_BLOCK_CONDITION;
+				}
+
 				break;
 			}
 		}
 		return new Pair<Integer, Object>(i, output);
 	}
 
-private Pair<Integer,ConstantLiteral> evalDoubleQuoteLiteral(int i, String rubyExpression) {
-	InterpolatedStringDefinition interpString = new InterpolatedStringDefinition();
-	i = parseStringLiteral(interpString, i + 1, rubyExpression);
-	return new Pair<Integer,ConstantLiteral>(i, interpString);
-}
+	private int parseCommentSection(int i, String rubyExpression) {
+		for (; i < rubyExpression.length(); i++) {
+			col++;
+			char currentChar = rubyExpression.charAt(i);
+			printChar(currentChar);
+			logPrint("COMMENT_SECTION");
+			if (currentChar == '\n') {
+				return i;
+			}
+			;
+		}
+		return i;
+	}
 
-private Pair<Integer,ConstantLiteral> evalSingleQuoteLiteral(int i, String rubyExpression) {
-	ConstantStringDefinition constantString = new ConstantStringDefinition();
-	i = parseStringLiteral(constantString, i + 1, rubyExpression);
-	return new Pair<Integer,ConstantLiteral>(i, constantString);
-}
+	private Pair<Integer, ConstantLiteral> evalDoubleQuoteLiteral(int i, String rubyExpression) {
+		InterpolatedStringDefinition interpString = new InterpolatedStringDefinition();
+		i = parseStringLiteral(interpString, i + 1, rubyExpression);
+		return new Pair<Integer, ConstantLiteral>(i, interpString);
+	}
+
+	private Pair<Integer, ConstantLiteral> evalSingleQuoteLiteral(int i, String rubyExpression) {
+		ConstantStringDefinition constantString = new ConstantStringDefinition();
+		i = parseStringLiteral(constantString, i + 1, rubyExpression);
+		return new Pair<Integer, ConstantLiteral>(i, constantString);
+	}
 
 	private int parseClassDefinition(ClassDefinition classDefinition, int index, String rubyExpression) {
 		int i = index;
@@ -601,7 +835,9 @@ private Pair<Integer,ConstantLiteral> evalSingleQuoteLiteral(int i, String rubyE
 						continue;
 					}
 				}
-				i = parseStatements(i, methodDefinition.statements, rubyExpression);
+				Pair<Integer, Block> statementResult = parseStatements(i, rubyExpression);
+				i = statementResult.first();
+				methodDefinition.statements = statementResult.second().getStatements();
 				break;
 			}
 		}
@@ -609,7 +845,7 @@ private Pair<Integer,ConstantLiteral> evalSingleQuoteLiteral(int i, String rubyE
 	}
 
 	private void printChar(char currentChar) {
-		if (currentChar=='\n') {
+		if (currentChar == '\n') {
 			System.out.print("\\n ");
 		} else {
 			System.out.print(currentChar + "  ");
@@ -811,7 +1047,11 @@ private Pair<Integer,ConstantLiteral> evalSingleQuoteLiteral(int i, String rubyE
 	}
 
 	boolean isValidVariableStarterCharacter(char c) {
-		return Character.isAlphabetic(c) || c == '_' || c == '@';
+		return Character.isAlphabetic(c) || c == '_' || c == '@' || c == '$';
+	}
+
+	private boolean validMethodLastCharacter(char c) {
+		return c == '!' || c == '?';
 	}
 
 	private void logPrint(String string) {

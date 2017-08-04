@@ -37,16 +37,22 @@ public class Statement {
 					}
 					strBuilder.append(" ");
 				}
-				for(Statement statement : method.statements) {
+				for (Statement statement : method.statements) {
 					strBuilder.append(statement.toString() + ";");
 				}
 				strBuilder.append("\\n");
 			}
 		} else if (code == EVALUATE_EXPRESSION) {
-			FunctionCallDefinition definition = (FunctionCallDefinition) details;
-			if (definition.nextObject == null) {
-				strBuilder.append(definition.toString());
+			if (details instanceof FunctionCallDefinition) {
+				FunctionCallDefinition definition = (FunctionCallDefinition) details;
+				if (definition.nextObject == null) {
+					strBuilder.append(definition.toString());
+				}
+			} else {
+				strBuilder.append(details.toString());
 			}
+		} else {
+			throw new RuntimeException();
 		}
 		return strBuilder.toString();
 	}
