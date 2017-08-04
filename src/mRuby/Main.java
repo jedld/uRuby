@@ -14,6 +14,8 @@ public class Main {
 		//comments
 		test("# this is a comment\nputs \"Hello\" # This is a commend","1puts(\"Hello\",);");
 		
+		//module definition
+//		test("module MyModule\nend\n","");
 		//class definition
 		test("class Test\nend\nclass Test2\nend\n","2define class(Test) < \\n;define class(Test2) < \\n;");
 		test("class Test < Hello\nend\n","1define class(Test) < Hello\\n;");
@@ -72,7 +74,7 @@ public class Main {
 		test("if test\nputs \"Hello\"\nelse\nputs \"Hi\"\nend\n","1if(test())->{puts(\"Hello\",);} else {puts(\"Hi\",);};");
 		
 		//if elsif block
-		test("if test\nputs \"1\"\nelsif !test\nputs \"2\"\nelse\ncontinue\nend\n","1if(test())->{puts(\"Hello\",);} else {puts(\"Hi\",);};");
+		test("if test\nputs \"1\"\nelsif !test('hi')\nputs \"2\"\nelse\ncontinue\nend\n","1if(test())->{puts(\"1\",);} else if(!(test('hi',)))->{puts(\"2\",);} else {continue();};");
 		
 		//nested block if
 		test("if true\nif hello.good?\nputs \n\"hello\"\n end\nend\n", "1if(true())->{if(hello.good?())->{puts();\"hello\";};};");

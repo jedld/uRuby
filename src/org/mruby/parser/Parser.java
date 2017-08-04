@@ -43,6 +43,10 @@ public class Parser {
 	private static final int ASSIGNMENT_OPERATOR_WAIT_FOR_VALUE = 34;
 	private static final int READ_IF_CONDITION = 35;
 	private static final int EVAL_IF_BLOCK_CONDITION = 36;
+	private static final int BANG_OPERATOR_FUNCTION_CALL = 37;
+	private static final int PARSE_MODULE = 38;
+	private static final int MODULE_DEFINITION_CLASS_DEFINE_NAME = 39;
+	private static final int MODULE_DEFINITION_MODULE_DEFINE_BODY = 40;
 
 	int lineno = 1, col = 0;
 
@@ -82,6 +86,20 @@ public class Parser {
 						continue;
 					}
 				}
+				
+				if (currentChar == 'm') {
+					if (Utils.checkString(rubyExpression, i, "module")) {
+						i += 6;
+						ModuleDefinition moduleDefinition = new ModuleDefinition();
+						logPrint("eval class");
+						i = parseModuleDefinition(moduleDefinition, i, rubyExpression);
+						logPrint("end eval class");
+						currentContext = PARSE_STATEMENT;
+						Statement command = new Statement(Statement.DEFINE_MODULE);
+						command.setDetails(moduleDefinition);
+						statements.add(command);
+					}
+				}
 
 				if (currentChar == 'e') {
 					if (Utils.checkString(rubyExpression, i, "end")) {
@@ -105,6 +123,56 @@ public class Parser {
 			}
 		}
 		return new Pair<Integer, Block>(i, new Block(statements));
+	}
+
+	private int parseModuleDefinition(ModuleDefinition moduleDefinition, int i, String rubyExpression) {
+		// TODO Auto-generated method stub
+		int currentContext = PARSE_MODULE;
+		for (; i < rubyExpression.length(); i++) {
+			col++;
+			char currentChar = rubyExpression.charAt(i);
+			printChar(currentChar);
+			switch (currentContext) {
+			case PARSE_MODULE:
+					logPrint("PARSE_MODULE");
+					if (currentChar == ' ')
+						continue;
+					if (currentChar == '\n') {
+						lineno++;
+						col = 0;
+						continue;
+					}
+					if (Character.isAlphabetic(currentChar)) {
+						currentContext = MODULE_DEFINITION_CLASS_DEFINE_NAME;
+						moduleDefinition.appendToName(currentChar);
+						continue;
+					}
+					break;
+				case MODULE_DEFINITION_CLASS_DEFINE_NAME:
+					logPrint("MODULE_DEFINITION_CLASS_DEFINE_NAME");
+					if (currentChar == '\n') {
+						currentContext = MODULE_DEFINITION_MODULE_DEFINE_BODY;
+						lineno++;
+						col = 0;
+						continue;
+					}
+					if (isAlphaOrNumeric(currentChar)) {
+						moduleDefinition.appendToName(currentChar);
+						continue;
+					}
+					break;
+				case MODULE_DEFINITION_MODULE_DEFINE_BODY:
+					logPrint("MODULE_DEFINITION_MODULE_DEFINE_BODY");
+					if (currentChar == '\n') continue;
+					if (currentChar == 'e') {
+						if (Utils.checkString(rubyExpression, i, "end")) {
+							return i + 3;
+						}
+					}
+					break;
+			}
+		}
+		return i;
 	}
 
 	public Pair<Integer, Object> parseExpression(int i, Object subject, String rubyExpression, boolean exitOnNewLine) {
@@ -142,7 +210,7 @@ public class Parser {
 					operation = new NotFunction();
 					operation.setName("!");
 					output = operation;
-					currentContext = FUNCTION_CALL_W_PARAM;
+					currentContext = BANG_OPERATOR_FUNCTION_CALL;
 					continue;
 				}
 
@@ -468,6 +536,17 @@ public class Parser {
 				subject = result.second();
 				operation.addParam(new FunctionCallParam(result.second()));
 				break;
+			case BANG_OPERATOR_FUNCTION_CALL:
+				if (currentChar == ' ') {
+					continue;
+				}
+				logPrint("eval");
+				result = parseExpression(i, subject, rubyExpression, exitOnNewLine);
+				logPrint("end");
+				i = result.first();
+				subject = result.second();
+				operation.addParam(new FunctionCallParam(result.second()));
+				return new Pair<Integer, Object>(i, output);
 			case FUNCTION_CALL_W_NEXT_CALL:
 				logPrint("FUNCTION_CALL_W_NEXT_CALL");
 				if (currentChar == '.') {

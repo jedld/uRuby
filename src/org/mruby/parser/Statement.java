@@ -5,6 +5,7 @@ public class Statement {
 	public static final int CALL_SELF_FUNCTION = 2;
 	public static final int CALL_OBJECT_FUNCTION = 3;
 	public static final int EVALUATE_EXPRESSION = 4;
+	public static final int DEFINE_MODULE = 5;
 	private int code;
 	private Object details;
 
@@ -42,6 +43,8 @@ public class Statement {
 				}
 				strBuilder.append("\\n");
 			}
+		} else if (code == DEFINE_MODULE) { 
+			strBuilder.append(details.toString());
 		} else if (code == EVALUATE_EXPRESSION) {
 			if (details instanceof FunctionCallDefinition) {
 				FunctionCallDefinition definition = (FunctionCallDefinition) details;
