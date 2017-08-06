@@ -2,7 +2,7 @@ package org.mruby.parser;
 
 import java.util.ArrayList;
 
-public class ClassDefinition {
+public class ClassDefinition extends Expression {
 	StringBuilder name = new StringBuilder();
 	StringBuilder extendName = new StringBuilder();
 	ArrayList<MethodDefinition> methods = new ArrayList<>();

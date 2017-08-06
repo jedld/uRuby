@@ -1,6 +1,6 @@
 package org.mruby.parser;
 
-public class ConstantLiteral {
+public class ConstantLiteral extends Expression {
 	StringBuffer valueBuffer = new StringBuffer();
 	
 	public void appendValue(char currentChar) {

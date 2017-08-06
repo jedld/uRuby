@@ -3,7 +3,7 @@ package org.mruby.parser;
 import java.util.ArrayList;
 import java.util.List;
 
-public class FunctionCallDefinition {
+public class FunctionCallDefinition extends Expression {
 	String name;
 	Object object, nextObject, altObject;
 	ArrayList<FunctionCallParam> params = new ArrayList<>();

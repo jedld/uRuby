@@ -9,6 +9,7 @@ import org.mruby.parser.exception.ParseException;
 import org.mruby.utils.Utils;
 
 public class Main {
+	public static int testsRan = 0;
 	public static void main(String args[]) {
 		Ruby ruby = new Ruby();
 		//comments
@@ -66,6 +67,14 @@ public class Main {
 		
 		//inline if
 		test("puts \"hello\" if !true", "1if(!(true()))->puts(\"hello\",);");
+		test("puts \"hello\"; if !true\nputs \"Hi\"\nend", "2puts(\"hello\",);if(!(true()))->{puts(\"Hi\",);};");
+		test("puts \"hello\"\n if !true\nputs \"Hi\"\nend", "2puts(\"hello\",);if(!(true()))->{puts(\"Hi\",);};");
+		
+		//inline assignment with if
+		test("puts.hello if !true", "1if(!(true()))->puts.hello();");
+		
+		//inline assignment with if
+		test("msg =\"hello\" if !true", "2;if(!(true()))->msg=\"hello\";");
 		
 		//block if
 		test("if test\nputs \"hello\"\n; puts hello.name;end\n","1if(test())->{puts(\"hello\",);puts(hello.name(),);};");
@@ -88,10 +97,11 @@ public class Main {
 //			
 //		}
 //		System.out.print(Utils.printCommands(commands));
-		ruby.printIR();
+		System.out.println("tests ran " + testsRan);
 	}
 
 	public static boolean test(String expression, String expected) {
+		testsRan++;
 		System.out.println("---------------------------");
 		System.out.println(expression);
 		Ruby ruby = new Ruby();
@@ -104,5 +114,6 @@ public class Main {
 			throw new ExpectationError();
 		}
 		return true;
+
 	}
 }
